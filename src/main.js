@@ -38,8 +38,31 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight)
 })
 
+const mouse = new THREE.Vector2()
+
+window.addEventListener('mousemove', (e) => {
+    const aspect = window.innerWidth / window.innerHeight
+    mouse.x = ((e.clientX / window.innerWidth) * 2 - 1) * zoom * aspect
+    mouse.y = (-(e.clientY / window.innerHeight) * 2 + 1) * zoom
+})
+
 function animate() {
     requestAnimationFrame(animate)
+
+    const minDist = 4
+    const dx = triangle.position.x - mouse.x
+    const dy = triangle.position.y - mouse.y
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1
+    const targetX = mouse.x + (dx / dist) * minDist
+    const targetY = mouse.y + (dy / dist) * minDist
+
+    triangle.position.x += (targetX - triangle.position.x) * 0.05
+    triangle.position.y += (targetY - triangle.position.y) * 0.05
+
+    const rx = mouse.x - triangle.position.x
+    const ry = mouse.y - triangle.position.y
+    triangle.rotation.z = Math.atan2(-rx, ry)
+
     renderer.render(scene, camera)
 }
 
