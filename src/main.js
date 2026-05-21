@@ -32,6 +32,67 @@ const material = new THREE.MeshStandardMaterial({ color: 0xff8800, metalness: 0.
 const triangle = new THREE.Mesh(geometry, material)
 scene.add(triangle)
 
+// --- ENNEMIS ---
+const enemies      = []
+const ENEMY_SPEED  = 0.06
+let   spawnTimer   = 0
+const SPAWN_RATE   = 300   // un ennemi toutes les 100 frames
+
+// Forme losange pour le diamant
+const diamondShape = new THREE.Shape()
+diamondShape.moveTo( 0,    1.2)
+diamondShape.lineTo( 0.85, 0)
+diamondShape.lineTo( 0,   -1.2)
+diamondShape.lineTo(-0.85, 0)
+diamondShape.closePath()
+
+function spawnEnemy() {
+    // Choisir un bord aléatoire (haut/bas/gauche/droite)
+    const side  = Math.floor(Math.random() * 4)
+    const bx    = 32   // limite horizontale hors champ
+    const by    = 22   // limite verticale hors champ
+    let x, y
+
+    if      (side === 0) { x = (Math.random() - 0.5) * bx * 2 ; y =  by }
+    else if (side === 1) { x = (Math.random() - 0.5) * bx * 2 ; y = -by }
+    else if (side === 2) { x =  bx ; y = (Math.random() - 0.5) * by * 2 }
+    else                 { x = -bx ; y = (Math.random() - 0.5) * by * 2 }
+
+    const type = Math.random() < 0.5 ? 'cube' : 'diamond'
+    let geo, color
+
+    if (type === 'cube') {
+        geo   = new THREE.BoxGeometry(1.5, 1.5, 1.5)
+        color = 0xff2222
+    } else {
+        geo   = new THREE.ExtrudeGeometry(diamondShape, { depth: 0.5, bevelEnabled: false })
+        color = 0x9900ff
+    }
+
+    const mat  = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.3 })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.position.set(x, y, 0)
+    scene.add(mesh)
+
+    enemies.push({ mesh, type, hp: type === 'cube' ? 3 : 2 })
+}
+
+function updateEnemies() {
+    for (const e of enemies) {
+        // Vecteur vers le joueur, normalisé
+        const dx   = triangle.position.x - e.mesh.position.x
+        const dy   = triangle.position.y - e.mesh.position.y
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1
+
+        e.mesh.position.x += (dx / dist) * ENEMY_SPEED
+        e.mesh.position.y += (dy / dist) * ENEMY_SPEED
+
+        // Rotation sur eux-mêmes pour l'effet menaçant
+        e.mesh.rotation.z += 0.02
+        e.mesh.rotation.x += 0.01
+    }
+}
+
 // Missiles
 const missiles = []          // tableau qui stocke tous les missiles actifs
 const MISSILE_SPEED = 0.5    // vitesse de déplacement par frame
@@ -127,6 +188,14 @@ function animate() {
     }
 
     updateMissiles()
+
+    spawnTimer++
+    if (spawnTimer >= SPAWN_RATE) { 
+        if(enemies.length <= 5){
+            spawnEnemy(); spawnTimer = 0 }
+        }
+
+    updateEnemies()
 
     renderer.render(scene, camera)
 }
