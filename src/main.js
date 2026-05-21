@@ -16,7 +16,7 @@ renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setPixelRatio(window.devicePixelRatio)
 document.body.appendChild(renderer.domElement)
 
-// Triangle
+// Triangle (joueur)
 const geometry = new THREE.BufferGeometry()
 const vertices = new Float32Array([
      0.0,  1.0, 0,
@@ -27,6 +27,53 @@ geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
 const material = new THREE.LineBasicMaterial({ color: 0xff8800 })
 const triangle = new THREE.LineLoop(geometry, material)
 scene.add(triangle)
+
+// Missiles
+const missiles = []          // tableau qui stocke tous les missiles actifs
+const MISSILE_SPEED = 0.5    // vitesse de déplacement par frame
+const FIRE_RATE = 15         // tirer 1 missile toutes les 20 frames
+let fireTimer = 0            // compteur de frames depuis le dernier tir
+
+function spawnMissile() {
+    // Petite sphère comme missile
+    const geo = new THREE.CircleGeometry(0.2, 8)
+    const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff })
+    const mesh = new THREE.Mesh(geo, mat)
+
+    // Part de la position du triangle
+    mesh.position.set(triangle.position.x, triangle.position.y, 0)
+
+    // Direction vers la souris (vecteur normalisé)
+    const rx = mouse.x - triangle.position.x
+    const ry = mouse.y - triangle.position.y
+    const len = Math.sqrt(rx * rx + ry * ry)
+
+    scene.add(mesh)
+    missiles.push({
+        mesh,
+        vx: (rx / len) * MISSILE_SPEED,  // vitesse X
+        vy: (ry / len) * MISSILE_SPEED,  // vitesse Y
+    })
+}
+
+function updateMissiles() {
+    for (let i = missiles.length - 1; i >= 0; i--) {
+        const m = missiles[i]
+
+        // Déplacer le missile
+        m.mesh.position.x += m.vx
+        m.mesh.position.y += m.vy
+
+        // Supprimer si hors champ
+        if (
+            Math.abs(m.mesh.position.x) > zoom * 3 ||
+            Math.abs(m.mesh.position.y) > zoom * 3
+        ) {
+            scene.remove(m.mesh)
+            missiles.splice(i, 1)
+        }
+    }
+}
 
 window.addEventListener('resize', () => {
     const aspect = window.innerWidth / window.innerHeight
@@ -49,6 +96,7 @@ window.addEventListener('mousemove', (e) => {
 function animate() {
     requestAnimationFrame(animate)
 
+    // Déplacement du triangle
     const minDist = 4
     const dx = triangle.position.x - mouse.x
     const dy = triangle.position.y - mouse.y
@@ -59,9 +107,19 @@ function animate() {
     triangle.position.x += (targetX - triangle.position.x) * 0.05
     triangle.position.y += (targetY - triangle.position.y) * 0.05
 
+    // Rotation vers la souris
     const rx = mouse.x - triangle.position.x
     const ry = mouse.y - triangle.position.y
     triangle.rotation.z = Math.atan2(-rx, ry)
+
+    // Tir automatique
+    fireTimer++
+    if (fireTimer >= FIRE_RATE) {
+        spawnMissile()
+        fireTimer = 0
+    }
+
+    updateMissiles()
 
     renderer.render(scene, camera)
 }
