@@ -36,7 +36,7 @@ scene.add(triangle)
 const enemies      = []
 const ENEMY_SPEED  = 0.06
 let   spawnTimer   = 0
-const SPAWN_RATE   = 300   // un ennemi toutes les 100 frames
+const SPAWN_RATE   = 300
 
 // Forme losange pour le diamant
 const diamondShape = new THREE.Shape()
@@ -47,9 +47,8 @@ diamondShape.lineTo(-0.85, 0)
 diamondShape.closePath()
 
 function spawnEnemy() {
-    // Choisir un bord aléatoire (haut/bas/gauche/droite)
     const side  = Math.floor(Math.random() * 4)
-    const bx    = 32   // limite horizontale hors champ
+    const bx    = 32   // limite horizontale hors champ 
     const by    = 22   // limite verticale hors champ
     let x, y
 
@@ -58,15 +57,24 @@ function spawnEnemy() {
     else if (side === 2) { x =  bx ; y = (Math.random() - 0.5) * by * 2 }
     else                 { x = -bx ; y = (Math.random() - 0.5) * by * 2 }
 
-    const type = Math.random() < 0.5 ? 'cube' : 'diamond'
+    const rand = Math.random()
+    const type = rand < 0.33 ? 'cube' : rand < 0.66 ? 'diamond' : 'triangle'
     let geo, color
 
     if (type === 'cube') {
         geo   = new THREE.BoxGeometry(1.5, 1.5, 1.5)
-        color = 0xff2222
+        color = 0xffcc00
+    } else if (type === 'triangle') {
+        const triShape = new THREE.Shape()
+        triShape.moveTo( 0.0,  1.0)
+        triShape.lineTo(-0.8, -0.8)
+        triShape.lineTo( 0.8, -0.8)
+        triShape.closePath()
+        geo   = new THREE.ExtrudeGeometry(triShape, { depth: 0.5, bevelEnabled: false })
+        color = 0xff2200
     } else {
         geo   = new THREE.ExtrudeGeometry(diamondShape, { depth: 0.5, bevelEnabled: false })
-        color = 0x9900ff
+        color = 0x3399ff
     }
 
     const mat  = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.3 })
@@ -74,29 +82,30 @@ function spawnEnemy() {
     mesh.position.set(x, y, 0)
     scene.add(mesh)
 
-    enemies.push({ mesh, type, hp: type === 'cube' ? 3 : 2 })
+    const speed = type === 'triangle' ? 0.1 : type === 'cube' ? 0.03 : 0.06
+    enemies.push({ mesh, type, hp: type === 'cube' ? 5 : type === 'triangle' ? 2 : 3, speed })
 }
 
 function updateEnemies() {
     for (const e of enemies) {
-        // Vecteur vers le joueur, normalisé
+        // Vecteur vers le joueur
         const dx   = triangle.position.x - e.mesh.position.x
         const dy   = triangle.position.y - e.mesh.position.y
         const dist = Math.sqrt(dx * dx + dy * dy) || 1
 
-        e.mesh.position.x += (dx / dist) * ENEMY_SPEED
-        e.mesh.position.y += (dy / dist) * ENEMY_SPEED
+        e.mesh.position.x += (dx / dist) * e.speed
+        e.mesh.position.y += (dy / dist) * e.speed
 
-        // Rotation sur eux-mêmes pour l'effet menaçant
+        // Rotation sur eux-mêmes
         e.mesh.rotation.z += 0.02
-        e.mesh.rotation.x += 0.01
+        e.mesh.rotation.x += 0.02
     }
 }
 
 // Missiles
 const missiles = []          // tableau qui stocke tous les missiles actifs
 const MISSILE_SPEED = 0.5    // vitesse de déplacement par frame
-const FIRE_RATE = 15         // tirer 1 missile toutes les 20 frames
+const FIRE_RATE = 50       // tirer 1 missile toutes les 20 frames
 let fireTimer = 0            // compteur de frames depuis le dernier tir
 
 function spawnMissile() {
@@ -108,7 +117,7 @@ function spawnMissile() {
     // Part de la position du triangle
     mesh.position.set(triangle.position.x, triangle.position.y, 0)
 
-    // Direction vers la souris (vecteur normalisé)
+    // Direction vers la souris
     const rx = mouse.x - triangle.position.x
     const ry = mouse.y - triangle.position.y
     const len = Math.sqrt(rx * rx + ry * ry)
@@ -121,21 +130,41 @@ function spawnMissile() {
     })
 }
 
+function killEnemy(index) {
+    scene.remove(enemies[index].mesh)
+    enemies.splice(index, 1)
+}
+
 function updateMissiles() {
     for (let i = missiles.length - 1; i >= 0; i--) {
         const m = missiles[i]
 
-        // Déplacer le missile
         m.mesh.position.x += m.vx
         m.mesh.position.y += m.vy
 
         // Supprimer si hors champ
-        if (
-            Math.abs(m.mesh.position.x) > 80 ||
-            Math.abs(m.mesh.position.y) > 80
-        ) {
+        if (Math.abs(m.mesh.position.x) > 80 || Math.abs(m.mesh.position.y) > 80) {
             scene.remove(m.mesh)
             missiles.splice(i, 1)
+            continue
+        }
+
+        // Collision missile → ennemi
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const e    = enemies[j]
+            const dx   = m.mesh.position.x - e.mesh.position.x
+            const dy   = m.mesh.position.y - e.mesh.position.y
+            const dist = Math.sqrt(dx * dx + dy * dy)
+
+            const hitRadius = e.type === 'cube' ? 1.2 : 1.0
+
+            if (dist < hitRadius) {
+                e.hp--
+                scene.remove(m.mesh)
+                missiles.splice(i, 1)
+                if (e.hp <= 0) killEnemy(j)
+                break
+            }
         }
     }
 }
@@ -146,7 +175,6 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight)
 })
 
-// On lance un rayon depuis la caméra et on trouve où il coupe le plan Z=0 (le plan du jeu)
 const raycaster = new THREE.Raycaster()
 const ndcMouse = new THREE.Vector2()
 const gamePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
